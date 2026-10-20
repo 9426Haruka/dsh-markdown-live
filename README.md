@@ -29,7 +29,7 @@
 1. 克隆仓库：
 
    ```bash
-   git clone https://github.com/<your-name>/dsh-markdown-live.git
+   git clone https://github.com/9426Haruka/dsh-markdown-live.git
    ```
 
 2. 在 DSH 里安装该目录作为 bundle：
