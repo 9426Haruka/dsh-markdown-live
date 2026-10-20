@@ -287,6 +287,18 @@ window.__ModuleLoader__.load({
       return tail
     }
 
+    /**
+     * Hide every trailing separator space except the last one, so an input like
+     * `-   item` or `>   quoted` renders with the same single-space gap that the
+     * Markdown renderer gives it (extra spaces used to widen the composer gap).
+     */
+    function markEndKeepingOneSpace(text, start, end) {
+      if (end <= start) return end
+      const last = text[end - 1]
+      if (last !== ' ' && last !== '\t') return end
+      return end - 1
+    }
+
     /** Nesting level from the leading-space run of a list line. */
     function indentLevelOf(spaces) {
       if (spaces <= 0) return 0
@@ -484,7 +496,7 @@ window.__ModuleLoader__.load({
             role: 'quote',
             lang: null,
             level: 0,
-            marks: [{ start: 0, end: markEndWithoutTrailingSpace(text, 0, quote[0].length), kind: 'quote' }],
+            marks: [{ start: 0, end: markEndKeepingOneSpace(text, 0, quote[0].length), kind: 'quote' }],
             noInline: false,
           })
           continue
@@ -492,14 +504,14 @@ window.__ModuleLoader__.load({
         const bullet = BULLET_RE.exec(text)
         if (bullet !== null) {
           const level = indentLevelOf(bullet[1].length)
-          const marks = [{ start: 0, end: markEndWithoutTrailingSpace(text, 0, bullet[0].length), kind: 'bullet' }]
+          const marks = [{ start: 0, end: markEndKeepingOneSpace(text, 0, bullet[0].length), kind: 'bullet' }]
           const rest = text.slice(bullet[0].length)
           const task = TASK_RE.exec(rest)
           if (task !== null) {
             const taskStart = bullet[0].length
             marks.push({
               start: taskStart,
-              end: markEndWithoutTrailingSpace(text, taskStart, taskStart + task[0].length),
+              end: markEndKeepingOneSpace(text, taskStart, taskStart + task[0].length),
               kind: task[1] === ' ' ? 'task-open' : 'task-done',
             })
             out.push({ role: 'task', lang: null, level, marks, noInline: false })
@@ -515,7 +527,7 @@ window.__ModuleLoader__.load({
             lang: null,
             level: indentLevelOf(ordered[1].length),
             marks: [
-              { start: 0, end: markEndWithoutTrailingSpace(text, 0, ordered[0].length), kind: 'ordered' },
+              { start: 0, end: markEndKeepingOneSpace(text, 0, ordered[0].length), kind: 'ordered' },
             ],
             noInline: false,
           })
@@ -1637,11 +1649,17 @@ window.__ModuleLoader__.load({
       const lines = text.split('\n')
       const out = []
       let fence = null
+      let previous = null
+      const isQuote = (line) => /^ {0,3}>[ \t]/.test(line)
+      const isList = (line) => /^ *(?:[-*+]|\d{1,9}[.)])(?:[ \t]+|$)/.test(line)
+      const isHeading = (line) => /^ {0,3}#{1,6}(?:[ \t]|$)/.test(line)
+      const isRule = (line) => /^ {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/.test(line)
       for (const line of lines) {
         const marker = /^ {0,3}([`~]{3,})/.exec(line)
         if (fence === null && marker !== null) {
           fence = marker[1][0]
           out.push(line)
+          previous = null
           continue
         }
         if (fence !== null) {
@@ -1649,7 +1667,20 @@ window.__ModuleLoader__.load({
           out.push(line)
           continue
         }
-        out.push(line.length > 0 ? line + '  ' : line)
+        if (line.trim() === '') {
+          out.push(line)
+          previous = 'blank'
+          continue
+        }
+        const kind = isQuote(line) ? 'quote' : isList(line) ? 'list' : 'plain'
+        // A blockquote / list paragraph swallows the following plain line as a
+        // lazy continuation in Markdown, which made sent messages look wrong.
+        // A blank line closes that block so the renderer matches the composer.
+        if ((previous === 'quote' || previous === 'list') && kind === 'plain' && !isHeading(line) && !isRule(line)) {
+          out.push('')
+        }
+        out.push(line + '  ')
+        previous = kind
       }
       return out.join('\n')
     }
