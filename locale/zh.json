@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "输入框实时 Markdown",
+    "description": "在输入框里实时渲染 Markdown，并让已发送的用户消息按 Markdown 显示。发送的文本仍是原始 Markdown。"
+  }
+}

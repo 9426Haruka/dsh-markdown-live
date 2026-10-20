@@ -1,0 +1,56 @@
+{
+  "name": "dsh-markdown-live",
+  "version": "0.2.1",
+  "private": false,
+  "type": "module",
+  "description": "DSH 桌面端插件：输入框内实时 Markdown 渲染（标题/引用/列表/任务/代码围栏/分割线/行内样式，语法标记在非光标行自动淡出），并让已发送的用户消息按 Markdown 渲染；提交文本保持字面 Markdown 不变。/ DSH desktop plugin: live Markdown rendering inside the composer plus Markdown-rendered user messages; the submitted text stays literal Markdown.",
+  "license": "MIT",
+  "author": "Haruka",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "markdown",
+    "lexical",
+    "editor",
+    "composer"
+  ],
+  "main": "./index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/9426Haruka/dsh-markdown-live.git"
+  },
+  "homepage": "https://github.com/9426Haruka/dsh-markdown-live#readme",
+  "bugs": {
+    "url": "https://github.com/9426Haruka/dsh-markdown-live/issues"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    }
+  }
+}

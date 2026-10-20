@@ -1,0 +1,9 @@
+# dsh-markdown-live bundle patch
+#
+# Inserts one Loader row (so the bundle appears in Settings → Plugins and can
+# be switched off there). The row is an inert carrier: every behavior lives in
+# client.js, which registers the composer live renderer and replaces the
+# plain-text user-message renderer with a Markdown one.
+- insert:
+    - id: markdown-live
+      name: 'dsh-markdown-live'

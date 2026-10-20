@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Live Markdown",
+    "description": "Renders Markdown live inside the composer and in sent user messages. The submitted text stays literal Markdown."
+  }
+}
