@@ -880,8 +880,19 @@ window.__ModuleLoader__.load({
             (leaf.node.getDetail() & DETAIL_UNMERGEABLE) === 0
           if (safe) {
             try {
-              const merged = mergedPrevious.mergeWithSibling(leaf.node)
-              mergedPrevious = merged ?? mergedPrevious
+              const previousText = mergedPrevious.getTextContent()
+              const currentText = leaf.node.getTextContent()
+              const removedKey = leaf.node.getKey()
+              const mergedKey = mergedPrevious.getKey()
+              // Re-point a selection that sits inside the removed node before
+              // removing it (the merged prefix keeps its length).
+              const selection = liveSelection(editor)
+              for (const point of [selection?.anchor, selection?.focus]) {
+                if (point == null || point.key !== removedKey) continue
+                point.set(mergedKey, (point.offset ?? 0) + previousText.length, 'text')
+              }
+              mergedPrevious.setTextContent(previousText + currentText)
+              leaf.node.remove()
               continue
             } catch {
               // Fall through and keep both nodes.
