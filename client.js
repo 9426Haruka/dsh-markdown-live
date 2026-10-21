@@ -861,10 +861,6 @@ window.__ModuleLoader__.load({
       // made a single inline-code span look like "first char + rest". Merge
       // them again unless the caret or the IME composition sits in one of them.
       if (editor._compositionKey != null) return
-      const selection = liveSelection(editor)
-      const guardKeys = new Set()
-      if (selection?.anchor?.key !== undefined) guardKeys.add(selection.anchor.key)
-      if (selection?.focus?.key !== undefined) guardKeys.add(selection.focus.key)
       let mergedPrevious = null
       let mergedAt = 0
       for (const leaf of readLeaves(block.node)) {
@@ -881,9 +877,7 @@ window.__ModuleLoader__.load({
             previousFormat === currentFormat &&
             (currentFormat & FMT_CODE) !== 0 &&
             (mergedPrevious.getDetail() & DETAIL_UNMERGEABLE) === 0 &&
-            (leaf.node.getDetail() & DETAIL_UNMERGEABLE) === 0 &&
-            !guardKeys.has(mergedPrevious.getKey()) &&
-            !guardKeys.has(leaf.node.getKey())
+            (leaf.node.getDetail() & DETAIL_UNMERGEABLE) === 0
           if (safe) {
             try {
               const merged = mergedPrevious.mergeWithSibling(leaf.node)
