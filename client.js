@@ -19,6 +19,9 @@ window.__ModuleLoader__.load({
     const FMT_ALL = FMT_BOLD | FMT_ITALIC | FMT_STRIKE | FMT_CODE
     /** Lexical text-node detail bit that stops normalization from merging. */
     const DETAIL_UNMERGEABLE = 2
+    /** Merge each inline-code span into one text node (primary fix). */
+    const MERGE_CODE_NODES = true
+
     /** History tag that folds our structural writes into the user's edit. */
     const HISTORY_MERGE_TAG = 'history-merge'
     /** Cap self-triggered structural writes per rolling second. */
@@ -976,6 +979,17 @@ window.__ModuleLoader__.load({
           }
         }
       }
+      // A code span that Lexical split into several text nodes becomes several
+      // adjacent <code> elements. Mark the run so CSS can draw it as ONE chip
+      // (only the outer pieces round, no extra padding between the pieces).
+      for (const el of blockEl.querySelectorAll('code')) {
+        const previous = el.previousSibling
+        const next = el.nextSibling
+        const previousIsCode = previous instanceof Element && previous.tagName === 'CODE'
+        const nextIsCode = next instanceof Element && next.tagName === 'CODE'
+        if (!previousIsCode) el.classList.add('dml-code-run-start')
+        if (!nextIsCode) el.classList.add('dml-code-run-end')
+      }
       return true
     }
 
@@ -1919,9 +1933,21 @@ window.__ModuleLoader__.load({
   font-family: var(--ds-font-family-code, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: 0.92em;
   background: var(--dml-code-bg);
-  border-radius: 7px;
-  padding: 0 5px;
+  border-radius: 0;
+  padding: 0;
   line-height: 0 !important;
+}
+/* A code span split into several adjacent <code> nodes is drawn as ONE chip:
+   only the first/last piece gets padding and outer rounding. */
+[data-composer-input] code.dml-code-run-start {
+  padding-left: 5px;
+  border-top-left-radius: 7px;
+  border-bottom-left-radius: 7px;
+}
+[data-composer-input] code.dml-code-run-end {
+  padding-right: 5px;
+  border-top-right-radius: 7px;
+  border-bottom-right-radius: 7px;
 }
 [data-composer-input] .dml-line.dml-caret:not(.dml-fence-body) { background: var(--dsw-alias-bg-base, var(--dsw-alias-bg-primary, #ffffff)); }
 .dml-usermd { display: block; white-space: normal; text-align: left; }
@@ -1976,8 +2002,10 @@ window.__ModuleLoader__.load({
         }
 
         // Drop diagnostics left by a development build of this plugin.
-        const staleDebug = document.getElementById('dml-debug')
-        if (staleDebug !== null) staleDebug.remove()
+        for (const staleId of ['dml-debug', 'dml-count']) {
+          const staleDebug = document.getElementById(staleId)
+          if (staleDebug !== null) staleDebug.remove()
+        }
 
         // Stylesheet, removed with the plugin.
         ctx.effect(() => {
