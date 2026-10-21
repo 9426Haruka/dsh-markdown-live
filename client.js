@@ -1110,6 +1110,8 @@ window.__ModuleLoader__.load({
 
 
 
+
+
           } catch (error) {
             warn(error)
           }
@@ -1718,7 +1720,7 @@ window.__ModuleLoader__.load({
 [data-composer-input] .dml-line { position: relative; }
 [data-composer-input] .dml-mark { color: var(--dml-mark-ink); font-weight: 400; font-style: normal; }
 [data-composer-input] .dml-mark-on { opacity: 0.65; }
-[data-composer-input] .dml-mark-off { font-size: 0 !important; letter-spacing: 0 !important; opacity: 0; }
+[data-composer-input] .dml-mark-off { font-size: 0 !important; line-height: 0 !important; letter-spacing: 0 !important; opacity: 0; }
 /* Block-level markers render through a pseudo glyph in BOTH caret states, so
    the content after the marker never shifts horizontally when the caret moves
    onto the line (the raw "- " text is never revealed). */
@@ -1848,7 +1850,8 @@ window.__ModuleLoader__.load({
   font-size: 0.92em;
   background: var(--dml-code-bg);
   border-radius: 7px;
-  padding: 1px 5px;
+  padding: 0 5px;
+  line-height: 0 !important;
 }
 [data-composer-input] .dml-line.dml-caret:not(.dml-fence-body) { background: var(--dsw-alias-bg-base, var(--dsw-alias-bg-primary, #ffffff)); }
 .dml-usermd { display: block; white-space: normal; text-align: left; }
