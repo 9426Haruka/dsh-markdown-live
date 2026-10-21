@@ -769,11 +769,28 @@ window.__ModuleLoader__.load({
       const boundaries = [...boundarySet].sort((a, b) => a - b)
       let offset = 0
       let needsWrite = false
+      let previous = null
       for (const leaf of block.leaves) {
         const start = offset
         const end = offset + leaf.text.length
         offset = end
-        if (leaf.kind !== 'text' || leaf.text.length === 0) continue
+        if (leaf.kind !== 'text' || leaf.text.length === 0) {
+          previous = null
+          continue
+        }
+        if (previous !== null && !boundarySet.has(start)) {
+          const previousFormat = previous.node.getFormat() & FMT_ALL
+          const currentFormat = leaf.node.getFormat() & FMT_ALL
+          if (
+            previousFormat === currentFormat &&
+            (currentFormat & FMT_CODE) !== 0 &&
+            (previous.node.getDetail() & DETAIL_UNMERGEABLE) === 0 &&
+            (leaf.node.getDetail() & DETAIL_UNMERGEABLE) === 0
+          ) {
+            needsWrite = true
+            break
+          }
+        }
         if (hasBoundaryInside(boundaries, start, end)) {
           needsWrite = true
           break
@@ -793,9 +810,10 @@ window.__ModuleLoader__.load({
           needsWrite = true
           break
         }
+        previous = leaf
       }
       if (!needsWrite) return null
-      return { block, analysis, boundaries }
+      return { block, analysis, boundaries, boundarySet }
     }
 
     /** Apply one shape plan inside the editor update. */
@@ -837,6 +855,46 @@ window.__ModuleLoader__.load({
           const detail = leaf.node.getDetail()
           if ((detail & DETAIL_UNMERGEABLE) === 0) leaf.node.setDetail(detail | DETAIL_UNMERGEABLE)
         }
+      }
+      // Lexical can leave several adjacent text nodes with the same format (one
+      // per edit / IME commit). Each one renders as its own <code> chip, which
+      // made a single inline-code span look like "first char + rest". Merge
+      // them again unless the caret or the IME composition sits in one of them.
+      if (editor._compositionKey != null) return
+      const selection = liveSelection(editor)
+      const guardKeys = new Set()
+      if (selection?.anchor?.key !== undefined) guardKeys.add(selection.anchor.key)
+      if (selection?.focus?.key !== undefined) guardKeys.add(selection.focus.key)
+      let mergedPrevious = null
+      let mergedAt = 0
+      for (const leaf of readLeaves(block.node)) {
+        const start = mergedAt
+        mergedAt += leaf.text.length
+        if (leaf.kind !== 'text' || leaf.text.length === 0) {
+          mergedPrevious = null
+          continue
+        }
+        if (mergedPrevious !== null && !plan.boundarySet.has(start)) {
+          const previousFormat = mergedPrevious.getFormat() & FMT_ALL
+          const currentFormat = leaf.node.getFormat() & FMT_ALL
+          const safe =
+            previousFormat === currentFormat &&
+            (currentFormat & FMT_CODE) !== 0 &&
+            (mergedPrevious.getDetail() & DETAIL_UNMERGEABLE) === 0 &&
+            (leaf.node.getDetail() & DETAIL_UNMERGEABLE) === 0 &&
+            !guardKeys.has(mergedPrevious.getKey()) &&
+            !guardKeys.has(leaf.node.getKey())
+          if (safe) {
+            try {
+              const merged = mergedPrevious.mergeWithSibling(leaf.node)
+              mergedPrevious = merged ?? mergedPrevious
+              continue
+            } catch {
+              // Fall through and keep both nodes.
+            }
+          }
+        }
+        mergedPrevious = leaf.node
       }
     }
 
