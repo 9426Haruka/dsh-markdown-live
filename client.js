@@ -769,28 +769,11 @@ window.__ModuleLoader__.load({
       const boundaries = [...boundarySet].sort((a, b) => a - b)
       let offset = 0
       let needsWrite = false
-      let previous = null
       for (const leaf of block.leaves) {
         const start = offset
         const end = offset + leaf.text.length
         offset = end
-        if (leaf.kind !== 'text' || leaf.text.length === 0) {
-          previous = null
-          continue
-        }
-        if (previous !== null && !boundarySet.has(start)) {
-          const previousFormat = previous.node.getFormat() & FMT_ALL
-          const currentFormat = leaf.node.getFormat() & FMT_ALL
-          if (
-            previousFormat === currentFormat &&
-            (currentFormat & FMT_CODE) !== 0 &&
-            (previous.node.getDetail() & DETAIL_UNMERGEABLE) === 0 &&
-            (leaf.node.getDetail() & DETAIL_UNMERGEABLE) === 0
-          ) {
-            needsWrite = true
-            break
-          }
-        }
+        if (leaf.kind !== 'text' || leaf.text.length === 0) continue
         if (hasBoundaryInside(boundaries, start, end)) {
           needsWrite = true
           break
@@ -810,7 +793,23 @@ window.__ModuleLoader__.load({
           needsWrite = true
           break
         }
-        previous = leaf
+      }
+      // An inline-code span must end up as ONE text node: Lexical renders each
+      // code-formatted text node as its own <code> element (own padding and
+      // corners), so a span split across nodes looked like "c" + "d".
+      if (!needsWrite) {
+        for (const span of analysis.spans) {
+          if ((span.flags & FMT_CODE) === 0 || span.end <= span.start) continue
+          let insideCount = 0
+          for (const leaf of block.leaves) {
+            if (leaf.kind !== 'text' || leaf.text.length === 0) continue
+            if (leaf.start >= span.start && leaf.start + leaf.text.length <= span.end) insideCount += 1
+          }
+          if (insideCount > 1) {
+            needsWrite = true
+            break
+          }
+        }
       }
       if (!needsWrite) return null
       return { block, analysis, boundaries, boundarySet }
@@ -856,50 +855,38 @@ window.__ModuleLoader__.load({
           if ((detail & DETAIL_UNMERGEABLE) === 0) leaf.node.setDetail(detail | DETAIL_UNMERGEABLE)
         }
       }
-      // Lexical can leave several adjacent text nodes with the same format (one
-      // per edit / IME commit). Each one renders as its own <code> chip, which
-      // made a single inline-code span look like "first char + rest". Merge
-      // them again unless the caret or the IME composition sits in one of them.
+      // An inline-code span must end up as ONE text node (see planShape). Merge
+      // every text node that falls inside the span; caret points inside removed
+      // nodes are re-pointed into the merged node first.
       if (editor._compositionKey != null) return
-      let mergedPrevious = null
-      let mergedAt = 0
-      for (const leaf of readLeaves(block.node)) {
-        const start = mergedAt
-        mergedAt += leaf.text.length
-        if (leaf.kind !== 'text' || leaf.text.length === 0) {
-          mergedPrevious = null
-          continue
+      const codeSpans = analysis.spans.filter(
+        (span) => (span.flags & FMT_CODE) !== 0 && span.end > span.start,
+      )
+      for (const span of codeSpans) {
+        let at = 0
+        const inside = []
+        for (const leaf of readLeaves(block.node)) {
+          const start = at
+          const end = at + leaf.text.length
+          at = end
+          if (leaf.kind !== 'text' || leaf.text.length === 0) continue
+          if (start >= span.start && end <= span.end) inside.push(leaf)
         }
-        if (mergedPrevious !== null && !plan.boundarySet.has(start)) {
-          const previousFormat = mergedPrevious.getFormat() & FMT_ALL
-          const currentFormat = leaf.node.getFormat() & FMT_ALL
-          const safe =
-            previousFormat === currentFormat &&
-            (currentFormat & FMT_CODE) !== 0 &&
-            (mergedPrevious.getDetail() & DETAIL_UNMERGEABLE) === 0 &&
-            (leaf.node.getDetail() & DETAIL_UNMERGEABLE) === 0
-          if (safe) {
-            try {
-              const previousText = mergedPrevious.getTextContent()
-              const currentText = leaf.node.getTextContent()
-              const removedKey = leaf.node.getKey()
-              const mergedKey = mergedPrevious.getKey()
-              // Re-point a selection that sits inside the removed node before
-              // removing it (the merged prefix keeps its length).
-              const selection = liveSelection(editor)
-              for (const point of [selection?.anchor, selection?.focus]) {
-                if (point == null || point.key !== removedKey) continue
-                point.set(mergedKey, (point.offset ?? 0) + previousText.length, 'text')
-              }
-              mergedPrevious.setTextContent(previousText + currentText)
-              leaf.node.remove()
-              continue
-            } catch {
-              // Fall through and keep both nodes.
-            }
+        if (inside.length < 2) continue
+        const first = inside[0].node
+        let text = first.getTextContent()
+        for (let i = 1; i < inside.length; i += 1) {
+          const node = inside[i].node
+          const removedText = node.getTextContent()
+          const selection = liveSelection(editor)
+          for (const point of [selection?.anchor, selection?.focus]) {
+            if (point == null || point.key !== node.getKey()) continue
+            point.set(first.getKey(), text.length + (point.offset ?? 0), 'text')
           }
+          text += removedText
+          node.remove()
         }
-        mergedPrevious = leaf.node
+        first.setTextContent(text)
       }
     }
 
