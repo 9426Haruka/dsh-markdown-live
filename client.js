@@ -1312,6 +1312,26 @@ window.__ModuleLoader__.load({
           const off = editor.registerUpdateListener(() => schedule(editor))
           wired.add(editor)
           unwires.add(off)
+          // restyle() pauses while IME composition owns the caret, and Lexical
+          // reports its final composition update while the composition key is
+          // still set. Without this follow-up pass the last committed edit would
+          // never be repainted (a split inline-code chip stayed split forever).
+          const dom =
+            typeof editor.getRootElement === 'function'
+              ? editor.getRootElement()
+              : document.querySelector(COMPOSER_INPUT)
+          if (dom instanceof HTMLElement) {
+            const onCompositionEnd = () => {
+              if (disposed) return
+              const later = () => {
+                if (!disposed) schedule(editor)
+              }
+              if (typeof requestAnimationFrame === 'function') requestAnimationFrame(later)
+              else setTimeout(later, 16)
+            }
+            dom.addEventListener('compositionend', onCompositionEnd, true)
+            unwires.add(() => dom.removeEventListener('compositionend', onCompositionEnd, true))
+          }
           schedule(editor)
         } catch (error) {
           warn(error)
