@@ -1771,113 +1771,6 @@ window.__ModuleLoader__.load({
       return out.join('\n')
     }
 
-    /**
-     * The host Markdown renderer follows CommonMark: a link destination that
-     * contains spaces or parentheses must be wrapped in `<...>`. The composer is
-     * lenient, so `[图标](D:\...\游戏,纸飞机 (1).png)` rendered as a link while
-     * the submitted message showed plain text. Normalise those destinations
-     * (and local Windows paths) before handing the text to the renderer.
-     */
-    function fixUserLinks(line) {
-      let i = 0
-      let last = 0
-      let result = ''
-      while (i < line.length) {
-        const ch = line[i]
-        if (ch === '\\') { i += 2; continue }
-        if (ch === '`') {
-          let run = 1
-          while (line[i + run] === '`') run += 1
-          let j = i + run
-          let closed = -1
-          while (j < line.length) {
-            if (line[j] === '\\') { j += 2; continue }
-            if (line[j] === '`') {
-              let r = 1
-              while (line[j + r] === '`') r += 1
-              if (r === run) { closed = j; break }
-              j += r
-              continue
-            }
-            j += 1
-          }
-          i = closed >= 0 ? closed + run : i + run
-          continue
-        }
-        if (ch !== '[') { i += 1; continue }
-        let j = i + 1
-        let sawNested = false
-        while (j < line.length) {
-          if (line[j] === '\\') { j += 2; continue }
-          if (line[j] === '[') { sawNested = true; break }
-          if (line[j] === ']') break
-          j += 1
-        }
-        if (sawNested || j >= line.length || line[j] !== ']' || line[j + 1] !== '(') {
-          i += 1
-          continue
-        }
-        let k = j + 2
-        let depth = 1
-        let end = -1
-        while (k < line.length) {
-          const c = line[k]
-          if (c === '\\') { k += 2; continue }
-          if (c === '(') depth += 1
-          else if (c === ')') { depth -= 1; if (depth === 0) { end = k; break } }
-          k += 1
-        }
-        if (end < 0) { i += 1; continue }
-        const label = line.slice(i, j + 1)
-        const dest = line.slice(j + 2, end).trim()
-        if (dest.length > 0 && !dest.startsWith('<')) {
-          // The host Markdown renderer only turns http(s) destinations into
-          // links; local Windows paths are rejected by its URL sanitiser even
-          // inside <...>. Map a local path onto a reserved https URL (click is
-          // intercepted by our container) so the label keeps the link styling
-          // it has in the composer.
-          let target = null
-          if (/^[A-Za-z]:[\\/]/.test(dest) || dest.startsWith('\\\\')) {
-            target = ('https://dsh-file.invalid/' + encodeURIComponent(dest))
-              .replace(/\(/g, '%28')
-              .replace(/\)/g, '%29')
-          } else if (/[\s()]/.test(dest)) {
-            target = dest.replace(/\s/g, '%20').replace(/\(/g, '%28').replace(/\)/g, '%29')
-          }
-          if (target !== null) {
-            result += line.slice(last, i) + label + '(' + target + ')'
-            last = end + 1
-            i = end + 1
-            continue
-          }
-        }
-        i = end + 1
-      }
-      return last === 0 ? line : result + line.slice(last)
-    }
-
-    /** Apply fixUserLinks per line, leaving fences and inline code alone. */
-    function fixUserLinksMultiLine(text) {
-      if (text.indexOf('](') < 0) return text
-      const lines = text.split('\n')
-      const out = []
-      let fence = null
-      for (const line of lines) {
-        const marker = /^ {0,3}([`~]{3,})/.exec(line)
-        if (fence === null && marker !== null) {
-          fence = marker[1][0]
-          out.push(line)
-          continue
-        }
-        if (fence !== null) {
-          if (marker !== null && marker[1][0] === fence) fence = null
-          out.push(line)
-          continue
-        }
-        out.push(fixUserLinks(line))
-      }
-      return out.join('\n')
-    }
     function createUserTextMarkdown() {
       return function UserTextMarkdown({ node, raw, t }) {
         const text =
@@ -1885,19 +1778,11 @@ window.__ModuleLoader__.load({
             ? raw
             : (node?.data?.display ?? node?.data?.text ?? '')
         const labels = React.useMemo(() => markdownLabels(t), [t])
-        const prepared = React.useMemo(() => hardenSoftBreaks(fixUserLinksMultiLine(text)), [text])
+        const prepared = React.useMemo(() => hardenSoftBreaks(text), [text])
         const rendered = prepared.length > 0
-        const onClick = React.useCallback((event) => {
-          const target = event.target
-          const anchor = target instanceof Element ? target.closest('a') : null
-          if (anchor == null) return
-          const href = anchor.getAttribute('href') ?? ''
-          if (href.indexOf('dsh-file.invalid/') < 0) return
-          event.preventDefault()
-        }, [])
         return React.createElement(
           'span',
-          { className: 'dml-usermd', 'data-dml-usermd': '', onClick },
+          { className: 'dml-usermd', 'data-dml-usermd': '' },
           rendered
             ? React.createElement(MarkdownText, { text: prepared, labels })
             : null,

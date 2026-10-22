@@ -1,6 +1,6 @@
 {
   "name": "dsh-markdown-live",
-  "version": "0.2.11",
+  "version": "0.2.12",
   "private": false,
   "type": "module",
   "description": "DSH 桌面端插件：输入框内实时 Markdown 渲染（标题/引用/列表/任务/代码围栏/分割线/行内样式，语法标记在非光标行自动淡出），并让已发送的用户消息按 Markdown 渲染；提交文本保持字面 Markdown 不变。/ DSH desktop plugin: live Markdown rendering inside the composer plus Markdown-rendered user messages; the submitted text stays literal Markdown.",
