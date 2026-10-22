@@ -1831,11 +1831,21 @@ window.__ModuleLoader__.load({
         const label = line.slice(i, j + 1)
         const dest = line.slice(j + 2, end).trim()
         if (dest.length > 0 && !dest.startsWith('<')) {
-          // CommonMark only accepts spaces/parentheses in a destination when it
-          // is written as <...>. Keep the destination itself untouched (raw
-          // Windows paths already render fine when they have no spaces).
-          if (/[\s()]/.test(dest) && !dest.includes('>')) {
-            result += line.slice(last, i) + label + '(<' + dest + '>)'
+          // The host Markdown renderer only turns http(s) destinations into
+          // links; local Windows paths are rejected by its URL sanitiser even
+          // inside <...>. Map a local path onto a reserved https URL (click is
+          // intercepted by our container) so the label keeps the link styling
+          // it has in the composer.
+          let target = null
+          if (/^[A-Za-z]:[\\/]/.test(dest) || dest.startsWith('\\\\')) {
+            target = ('https://dsh-file.invalid/' + encodeURIComponent(dest))
+              .replace(/\(/g, '%28')
+              .replace(/\)/g, '%29')
+          } else if (/[\s()]/.test(dest)) {
+            target = dest.replace(/\s/g, '%20').replace(/\(/g, '%28').replace(/\)/g, '%29')
+          }
+          if (target !== null) {
+            result += line.slice(last, i) + label + '(' + target + ')'
             last = end + 1
             i = end + 1
             continue
@@ -1877,9 +1887,17 @@ window.__ModuleLoader__.load({
         const labels = React.useMemo(() => markdownLabels(t), [t])
         const prepared = React.useMemo(() => hardenSoftBreaks(fixUserLinksMultiLine(text)), [text])
         const rendered = prepared.length > 0
+        const onClick = React.useCallback((event) => {
+          const target = event.target
+          const anchor = target instanceof Element ? target.closest('a') : null
+          if (anchor == null) return
+          const href = anchor.getAttribute('href') ?? ''
+          if (href.indexOf('dsh-file.invalid/') < 0) return
+          event.preventDefault()
+        }, [])
         return React.createElement(
           'span',
-          { className: 'dml-usermd', 'data-dml-usermd': '' },
+          { className: 'dml-usermd', 'data-dml-usermd': '', onClick },
           rendered
             ? React.createElement(MarkdownText, { text: prepared, labels })
             : null,
@@ -2099,10 +2117,11 @@ window.__ModuleLoader__.load({
         }
 
         // Drop diagnostics left by a development build of this plugin.
-        for (const staleId of ['dml-debug', 'dml-count']) {
+        for (const staleId of ['dml-debug', 'dml-count', 'dml-link-probe']) {
           const staleDebug = document.getElementById(staleId)
           if (staleDebug !== null) staleDebug.remove()
         }
+
 
 
         // Stylesheet, removed with the plugin.
